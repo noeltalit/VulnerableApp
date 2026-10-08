@@ -4,7 +4,8 @@ INSERT INTO auth_users VALUES (1, 'admin_sqli', 'not_needed_for_sqli', NULL, 'PL
 
 -- Level 2: Sensitive Data Logging
 -- Real password: 'v9K#2mLp!8zQ'
-INSERT INTO auth_users VALUES (2, 'admin_logs', 'v9K#2mLp!8zQ', NULL, 'PLAIN', 2, 'admin_logs@example.com', 'ADMIN');
+-- Stored as a BCrypt hash: the seed script itself is written to the DEBUG log
+INSERT INTO auth_users VALUES (2, 'admin_logs', '$2a$10$qy.9DqOEDeKFAAvbcbnWLuj9XT16j6mfmgsS.EuNsOziYSasqeN8.', NULL, 'BCRYPT', 2, 'admin_logs@example.com', 'ADMIN');
 
 -- Level 3: Password stored as a BCrypt hash instead of plaintext
 -- Real password: 'b7X$4nRj-6mW'
@@ -30,6 +31,6 @@ INSERT INTO auth_users VALUES (8, 'admin_weak', '$2a$10$bjuvzGvtOVJXOZt6VyTYXuT6
 -- Bcrypt hash for '9fG#2hJk*LmN!8qR'
 INSERT INTO auth_users VALUES (9, 'admin_secure', '$2a$10$1WiFUNqUY/vHTzR2QtuMQuzCLK3aZEdjEUpqS4msXOevaCz7Wobe.', NULL, 'BCRYPT', 9, 'admin_secure@example.com', 'ADMIN');
 
--- Level 10: BCrypt with an adequate work factor (cost 12, was 4)
--- Bcrypt hash (cost 12) for 'sunshine'
-INSERT INTO auth_users VALUES (10, 'admin_lowcost', '$2a$12$H6Pg4kwNKvw9z6d5HpNOmOKzE9Ds4E0DzHo2mYaENXYeceK50AJpq', NULL, 'BCRYPT', 10, 'admin_lowcost@example.com', 'ADMIN');
+-- Level 10: BCrypt with an adequate work factor (cost 12, was 4) and a strong password
+-- (the dictionary password 'sunshine' was replaced; the new one is deliberately not kept here)
+INSERT INTO auth_users VALUES (10, 'admin_lowcost', '$2a$12$MHImbnAyvchGXi9Vk92GBOhyNaZ7lXtfJxCK10GyhmolywoBPADQy', NULL, 'BCRYPT', 10, 'admin_lowcost@example.com', 'ADMIN');
