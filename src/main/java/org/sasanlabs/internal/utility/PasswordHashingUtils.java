@@ -2,36 +2,43 @@ package org.sasanlabs.internal.utility;
 
 import java.nio.charset.StandardCharsets;
 import java.security.*;
-import javax.crypto.Cipher;
+import java.util.Base64;
+import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
-/** Utility class for various password hashing algorithms. */
+/**
+ * Password hashing helpers following the OWASP Password Storage Cheat Sheet: Argon2id (m=19 MiB,
+ * t=2, p=1, 128-bit random salt) as the primary algorithm, bcrypt (cost &ge; 10) as the accepted
+ * fallback, and an optional secret pepper (HMAC-SHA-256) taken from the environment.
+ */
 public final class PasswordHashingUtils {
 
     private static final String HASH_SEPARATOR = ":";
     private static final int bcryptWorkFactor = 12;
 
+    /** OWASP Argon2id minimum configuration: 19 MiB memory, 2 iterations, parallelism 1. */
+    private static final int ARGON2_SALT_BYTES = 16;
+
+    private static final int ARGON2_HASH_BYTES = 32;
+    private static final int ARGON2_PARALLELISM = 1;
+    private static final int ARGON2_MEMORY_KIB = 19 * 1024;
+    private static final int ARGON2_ITERATIONS = 2;
+
+    /** Optional pepper, never stored with the hashes; set it outside the code base. */
+    private static final String PEPPER_ENV = "VULNERABLEAPP_PASSWORD_PEPPER";
+
+    private static final Argon2PasswordEncoder ARGON2ID =
+            new Argon2PasswordEncoder(
+                    ARGON2_SALT_BYTES,
+                    ARGON2_HASH_BYTES,
+                    ARGON2_PARALLELISM,
+                    ARGON2_MEMORY_KIB,
+                    ARGON2_ITERATIONS);
+
     private PasswordHashingUtils() {}
-
-    // Available Hashing Algorithms
-    public enum HashAlgorithm {
-        MD4("MD4"),
-        MD5("MD5"),
-        SHA1("SHA-1"),
-        SHA256("SHA-256");
-
-        private final String algorithmName;
-
-        HashAlgorithm(String algorithmName) {
-            this.algorithmName = algorithmName;
-        }
-
-        public String label() {
-            return this.algorithmName;
-        }
-    }
 
     // Registers Bouncy Castle as provider
     static {
@@ -40,27 +47,15 @@ public final class PasswordHashingUtils {
         }
     }
 
-    public static String md4Hex(String rawPassword) {
-        return getHashAsHex(rawPassword, HashAlgorithm.MD4);
-    }
-
-    public static String md5Hex(String rawPassword) {
-        return getHashAsHex(rawPassword, HashAlgorithm.MD5);
-    }
-
-    public static String sha1Hex(String rawPassword) {
-        return getHashAsHex(rawPassword, HashAlgorithm.SHA1);
-    }
-
-    public static String getHashAsHex(String rawPassword, HashAlgorithm hashAlgorithm) {
+    private static String getHashAsHex(String rawPassword) {
         try {
-            MessageDigest messageDigest = MessageDigest.getInstance(hashAlgorithm.label(), "BC");
+            MessageDigest messageDigest = MessageDigest.getInstance("SHA-256", "BC");
             byte[] digest = messageDigest.digest(rawPassword.getBytes(StandardCharsets.UTF_8));
             return EncodingUtils.bytesToHex(digest);
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(hashAlgorithm + "Hash Algorithm Not Found", e);
+            throw new IllegalStateException("SHA-256 Hash Algorithm Not Found", e);
         } catch (NoSuchProviderException e) {
-            throw new RuntimeException("Security Provider Bouncy Castle not found", e);
+            throw new IllegalStateException("Security Provider Bouncy Castle not found", e);
         }
     }
 
@@ -76,15 +71,56 @@ public final class PasswordHashingUtils {
         }
 
         String calculatedHash = sha256Hex(saltAndHash[0], rawPassword);
-        return saltAndHash[1].equalsIgnoreCase(calculatedHash);
+        return MessageDigest.isEqual(
+                saltAndHash[1].toLowerCase().getBytes(StandardCharsets.UTF_8),
+                calculatedHash.getBytes(StandardCharsets.UTF_8));
     }
 
     public static String sha256Hex(String salt, String rawPassword) {
-        return getHashAsHex(salt + rawPassword, HashAlgorithm.SHA256);
+        return getHashAsHex(salt + rawPassword);
     }
 
-    public static String unsaltedSha256Hex(String rawPassword) {
-        return getHashAsHex(rawPassword, HashAlgorithm.SHA256);
+    /**
+     * Applies the optional pepper (HMAC-SHA-256 keyed with the secret from {@value #PEPPER_ENV}).
+     * Without a configured pepper the password is returned unchanged.
+     */
+    private static String pepper(String rawPassword) {
+        String pepper = System.getenv(PEPPER_ENV);
+        if (pepper == null || pepper.isEmpty()) {
+            return rawPassword;
+        }
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(pepper.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return Base64.getEncoder()
+                    .encodeToString(mac.doFinal(rawPassword.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Unable to apply password pepper", e);
+        }
+    }
+
+    /** Argon2id hash (unique 128-bit salt per call) of the (peppered) password. */
+    public static String argon2idHash(String rawPassword) {
+        return ARGON2ID.encode(pepper(rawPassword));
+    }
+
+    /**
+     * Verifies a password against a stored Argon2id or bcrypt hash. Any other stored format
+     * (plaintext, encodings, ciphers, fast or unsalted digests) is rejected.
+     */
+    public static boolean verifyPassword(String rawPassword, String storedHash) {
+        if (rawPassword == null || storedHash == null) {
+            return false;
+        }
+        if (storedHash.startsWith("$argon2id$")) {
+            return ARGON2ID.matches(pepper(rawPassword), storedHash);
+        }
+        if (storedHash.startsWith("$2a$")
+                || storedHash.startsWith("$2b$")
+                || storedHash.startsWith("$2y$")) {
+            return isValidBcrypt(rawPassword, storedHash);
+        }
+        return false;
     }
 
     // BC not used for bcrypt due to extra complexity for BC implementation
@@ -100,55 +136,5 @@ public final class PasswordHashingUtils {
     public static boolean isValidBcrypt(String rawPassword, String bcryptHash) {
         BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(bcryptWorkFactor);
         return encoder.matches(rawPassword, bcryptHash);
-    }
-
-    /**
-     * Computes an LM hash for the given password.
-     *
-     * <p>Algorithm based on the LAN Manager specification.
-     *
-     * @see <a href="https://en.wikipedia.org/wiki/LAN_Manager">Wikipedia: LAN Manager</a>
-     */
-    public static String lmHash(String rawPassword) {
-        try {
-            // Convert to uppercase and pad to 14 bytes
-            String pwd = rawPassword.toUpperCase();
-            byte[] keyBytes = new byte[14];
-            byte[] passwordBytes = pwd.getBytes(StandardCharsets.US_ASCII);
-            System.arraycopy(passwordBytes, 0, keyBytes, 0, Math.min(passwordBytes.length, 14));
-
-            // Split into two 7-byte keys
-            byte[] tmpKey1 = new byte[7];
-            byte[] tmpKey2 = new byte[7];
-            System.arraycopy(keyBytes, 0, tmpKey1, 0, 7);
-            System.arraycopy(keyBytes, 7, tmpKey2, 0, 7);
-
-            // Encrypt the magic string "KGS!@#$%" using each key
-            return EncodingUtils.bytesToHex(lmDesEncrypt(tmpKey1))
-                    + EncodingUtils.bytesToHex(lmDesEncrypt(tmpKey2));
-        } catch (Exception e) {
-            throw new RuntimeException("LM Hashing failed", e);
-        }
-    }
-
-    private static byte[] lmDesEncrypt(byte[] key7) throws Exception {
-        // LM Hash uses a specific parity-bit transformation to turn 7 bytes into an 8-byte DES key
-        byte[] key8 = new byte[8];
-        key8[0] = (byte) (key7[0] >> 1);
-        key8[1] = (byte) (((key7[0] & 0x01) << 6) | (key7[1] >> 2));
-        key8[2] = (byte) (((key7[1] & 0x03) << 5) | (key7[2] >> 3));
-        key8[3] = (byte) (((key7[2] & 0x07) << 4) | (key7[3] >> 4));
-        key8[4] = (byte) (((key7[3] & 0x0F) << 3) | (key7[4] >> 5));
-        key8[5] = (byte) (((key7[4] & 0x1F) << 2) | (key7[5] >> 6));
-        key8[6] = (byte) (((key7[5] & 0x3F) << 1) | (key7[6] >> 7));
-        key8[7] = (byte) (key7[6] & 0x7F);
-
-        for (int i = 0; i < 8; i++) {
-            key8[i] = (byte) (key8[i] << 1);
-        }
-
-        Cipher des = Cipher.getInstance("DES/ECB/NoPadding", "BC");
-        des.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key8, "DES"));
-        return des.doFinal("KGS!@#$%".getBytes(StandardCharsets.US_ASCII));
     }
 }
