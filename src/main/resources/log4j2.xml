@@ -7,7 +7,7 @@
 				priority level 5 characters eg below for log [params] {WARN [params]} {DEBUG 
 				[params]} %t is thread name. %c{precision} precision for logger which published 
 				event. -->
-			%d{DEFAULT_NANOS} %-5p [%t] %c{10} (%F:%L) - %m%n%throwable{full}
+			%d{DEFAULT_NANOS} %-5p [%t] %c{10} (%F:%L) - %replace{%m}{(?i)(pass(word|wd)?|pwd|secret)=[^&amp; "',;]*}{$1=****}%n%throwable{full}
 		</Property>
 		<Property name="logPath">
 			./logs

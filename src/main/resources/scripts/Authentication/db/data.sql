@@ -3,9 +3,10 @@
 INSERT INTO auth_users VALUES (1, 'admin_sqli', 'not_needed_for_sqli', NULL, 'PLAIN', 1, 'admin_sqli@example.com', 'ADMIN');
 
 -- Level 2: Sensitive Data Logging
--- Real password: 'v9K#2mLp!8zQ'
--- Stored as a BCrypt hash: the seed script itself is written to the DEBUG log
-INSERT INTO auth_users VALUES (2, 'admin_logs', '$2a$10$qy.9DqOEDeKFAAvbcbnWLuj9XT16j6mfmgsS.EuNsOziYSasqeN8.', NULL, 'BCRYPT', 2, 'admin_logs@example.com', 'ADMIN');
+-- The previously published (and logged) password was rotated: the account now uses a strong
+-- random password that is deliberately not kept in the repository, stored as a BCrypt hash
+-- (cost 12), since this seed script itself is written to the DEBUG log.
+INSERT INTO auth_users VALUES (2, 'admin_logs', '$2a$12$wzIPNFS9pqV5KG0NWWEvJ.1mAT5u8zfdQVER9kT3MdGbWheboOZ9O', NULL, 'BCRYPT', 2, 'admin_logs@example.com', 'ADMIN');
 
 -- Level 3: Password stored as a BCrypt hash instead of plaintext
 -- Real password: 'b7X$4nRj-6mW'
