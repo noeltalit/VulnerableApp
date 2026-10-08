@@ -21,19 +21,6 @@ public class EncryptionUtils {
 
     private EncryptionUtils() {}
 
-    /**
-     * INSECURE: Custom cipher that obscures the texts by reversing it then Base64 encodes it.
-     *
-     * @param rawPassword password to encrypt
-     */
-    public static String customCipher(String rawPassword) throws EncryptionException {
-        if (rawPassword == null) {
-            throw new EncryptionException("Raw password cannot be null ");
-        }
-        String reversed = new StringBuilder(rawPassword).reverse().toString();
-        return EncodingUtils.encodeBase64(reversed);
-    }
-
     private static final byte[] salt = new byte[16];
 
     static {

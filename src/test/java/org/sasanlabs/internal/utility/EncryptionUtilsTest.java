@@ -11,17 +11,6 @@ import org.sasanlabs.internal.utility.exception.EncryptionException;
 class EncryptionUtilsTest {
 
     @Test
-    @DisplayName(
-            "Custom Cipher: Should reverse the string and return a valid Base64 encoded string")
-    void customCipher_ReverseAndBase64() throws EncryptionException {
-        String input = "password";
-        String reversed = "drowssap";
-        String expectedBase64 = EncodingUtils.encodeBase64(reversed);
-
-        assertEquals(expectedBase64, EncryptionUtils.customCipher(input));
-    }
-
-    @Test
     @DisplayName("Key Generation: Should derive an AES key from a string password")
     void getKeyFromPassword_ValidKey() throws EncryptionException {
         SecretKey key = EncryptionUtils.getKeyFromPassword("my-secret-password");
