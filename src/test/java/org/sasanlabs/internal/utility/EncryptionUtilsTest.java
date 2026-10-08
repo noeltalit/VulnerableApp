@@ -11,22 +11,6 @@ import org.sasanlabs.internal.utility.exception.EncryptionException;
 class EncryptionUtilsTest {
 
     @Test
-    @DisplayName("Caesar Cipher: Should shift characters by 3 and wrap around the alphabet")
-    void caesarCipher_CorrectShift() throws EncryptionException {
-        // Basic shift
-        assertEquals("def", EncryptionUtils.caesarCipher("abc", 3));
-
-        // Wrapping shift (z -> c)
-        assertEquals("abc", EncryptionUtils.caesarCipher("xyz", 3));
-
-        // Case preservation
-        assertEquals("Abc", EncryptionUtils.caesarCipher("Xyz", 3));
-
-        // Non-alphabetic characters remain unchanged
-        assertEquals("123! @#", EncryptionUtils.caesarCipher("123! @#", 3));
-    }
-
-    @Test
     @DisplayName(
             "Custom Cipher: Should reverse the string and return a valid Base64 encoded string")
     void customCipher_ReverseAndBase64() throws EncryptionException {

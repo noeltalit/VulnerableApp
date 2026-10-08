@@ -22,37 +22,6 @@ public class EncryptionUtils {
     private EncryptionUtils() {}
 
     /**
-     * INSECURE: Caesar Cipher shifts alphabetic characters positions to the right overflowing to
-     * the beginning of the alphabet. 'z' will shift to 'a' and so on.
-     *
-     * @param rawPassword plaintext password to encrypt
-     * @param shift how many shifts right
-     */
-    public static String caesarCipher(String rawPassword, int shift) throws EncryptionException {
-
-        if (rawPassword == null) {
-            throw new EncryptionException("Raw password cannot be null ");
-        }
-
-        // Technically shift can be any non-zero integer, for clarity it should be between 0-25
-        // inclusive
-        if (shift < 0 || shift >= 26) {
-            throw new EncryptionException("Shift value must be between 0 and 25 inclusive.");
-        }
-
-        StringBuilder builder = new StringBuilder();
-        for (char ch : rawPassword.toCharArray()) {
-            if (Character.isLetter(ch)) {
-                char base = Character.isUpperCase(ch) ? 'A' : 'a';
-                builder.append((char) ((ch - base + shift) % 26 + base));
-            } else {
-                builder.append(ch);
-            }
-        }
-        return builder.toString();
-    }
-
-    /**
      * INSECURE: Custom cipher that obscures the texts by reversing it then Base64 encodes it.
      *
      * @param rawPassword password to encrypt
